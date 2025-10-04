@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered ATS Resume Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            scroll-behavior: smooth;
+        }
+        .progress-ring__circle {
+            transition: stroke-dashoffset 0.8s cubic-bezier(0.65, 0, 0.35, 1);
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+        .tab-active {
+            border-color: #3b82f6;
+            color: #3b82f6;
+            background-color: #eff6ff;
+        }
+        #analyze-btn.is-loading .spinner {
+            display: inline-block;
+        }
+        #analyze-btn.is-loading .btn-text {
+            display: none;
+        }
+        /* Custom styles for feedback lists */
+        .feedback-list ul {
+            list-style: none;
+            padding: 0;
+        }
+        .feedback-list li {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+            line-height: 1.6;
+        }
+        .feedback-list li span:first-child {
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <script>
+        // Set the worker source for PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js`;
+    </script>
+
+    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+
+        <header class="text-center mb-8 md:mb-12">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-900 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-500">
+                Pro ATS Resume Analyzer <span class="text-sm font-medium text-white bg-indigo-500 rounded-full px-3 py-1 ml-2">AI Powered</span>
+            </h1>
+            <p class="text-gray-600 mt-3 text-lg max-w-3xl mx-auto">Upload or paste your resume and a job description to get a detailed AI analysis and an improved, ready-to-use resume.</p>
+        </header>
+
+        <div class="bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-gray-200">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Resume Input Section -->
+                <div>
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">Step 1: Provide Your Resume</h2>
+                    <div class="flex border-b mb-4">
+                        <button id="tab-pdf" class="tab-btn py-2 px-4 font-medium text-gray-600 border-b-2 tab-active">Upload PDF</button>
+                        <button id="tab-text" class="tab-btn py-2 px-4 font-medium text-gray-500 border-b-2 border-transparent">Paste Text</button>
+                    </div>
+                    <div id="pdf-content">
+                        <div id="pdf-dropzone" class="relative border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500 bg-gray-50 transition flex flex-col justify-center items-center min-h-[216px]">
+                            <input type="file" id="resume-file" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                            <div id="dropzone-prompt-content">
+                                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                                <p class="mt-2 text-sm text-gray-600"><span class="font-semibold text-blue-600">Click to upload</span> or drag and drop</p>
+                                <p class="mt-1 text-xs text-gray-500">PDF file only</p>
+                            </div>
+                            <div id="dropzone-success-content" class="hidden">
+                                <svg class="mx-auto h-12 w-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                <p id="pdf-name" class="mt-2 text-sm font-semibold text-gray-800 break-all"></p>
+                                <p class="mt-1 text-xs text-gray-500">Click or drop a new file to replace</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="text-content" class="hidden">
+                        <textarea id="resume-text" rows="12" class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-300 bg-gray-50" placeholder="Paste the full text of your resume here..."></textarea>
+                    </div>
+                </div>
+                <!-- Job Description Input Section -->
+                <div>
+                     <h2 class="text-xl font-semibold mb-4 text-gray-800">Step 2: Add Job Description</h2>
+                    <textarea id="job-desc" rows="15" class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-300 bg-gray-50" placeholder="Paste the entire job description here..."></textarea>
+                </div>
+            </div>
+
+            <div class="text-center mt-8">
+                <button id="analyze-btn" class="bg-blue-600 text-white font-bold py-3 px-12 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transform hover:scale-105 transition-all duration-300 shadow-lg flex items-center justify-center mx-auto">
+                    <span class="spinner w-5 h-5 mr-3 border-4 border-white border-t-transparent rounded-full animate-spin hidden"></span>
+                    <span class="btn-text">Analyze With AI</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results-section" class="mt-12 hidden">
+            <h2 class="text-3xl font-bold text-center mb-8 text-gray-900">AI Analysis Report</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                
+                <!-- Score & Experience Column -->
+                <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-xl border border-gray-200 flex flex-col items-center justify-center">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-700">Overall Skill Match</h3>
+                    <div class="relative w-48 h-48">
+                        <svg class="w-full h-full" viewBox="0 0 120 120">
+                            <circle class="text-gray-200" stroke-width="12" stroke="currentColor" fill="transparent" r="50" cx="60" cy="60" />
+                            <circle id="progress-circle" class="progress-ring__circle text-blue-600" stroke-width="12" stroke-linecap="round" stroke="currentColor" fill="transparent" r="50" cx="60" cy="60"/>
+                        </svg>
+                        <span id="score-text" class="absolute inset-0 flex items-center justify-center text-4xl font-bold text-gray-900">0%</span>
+                    </div>
+                    <p id="score-feedback" class="text-center mt-4 text-gray-600 font-medium"></p>
+                    <hr class="w-full my-6 border-gray-200">
+                    <h4 class="text-xl font-semibold text-gray-700">Work Experience</h4>
+                    <p id="experience-check" class="text-center mt-2 font-semibold text-lg"></p>
+                </div>
+
+                <!-- Keywords & Skills Analysis -->
+                <div class="lg:col-span-3 bg-white p-6 rounded-2xl shadow-xl border border-gray-200">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-700">Keyword & Skill Analysis</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                             <h4 class="font-semibold text-gray-600 mb-2">Matched Hard Skills:</h4>
+                            <div id="hard-skills" class="flex flex-wrap gap-2"></div>
+                        </div>
+                         <div>
+                             <h4 class="font-semibold text-gray-600 mb-2">Matched Soft Skills:</h4>
+                            <div id="soft-skills" class="flex flex-wrap gap-2"></div>
+                        </div>
+                    </div>
+                     <hr class="my-6">
+                    <div>
+                        <h4 class="font-semibold text-red-600">Skills to Add to Your Resume:</h4>
+                        <div class="mt-4 space-y-4">
+                            <div>
+                                <h5 class="font-medium text-gray-700">Missing Hard Skills:</h5>
+                                <div id="missing-hard-skills" class="flex flex-wrap gap-2 mt-2"></div>
+                            </div>
+                            <div>
+                                <h5 class="font-medium text-gray-700">Missing Soft Skills:</h5>
+                                <div id="missing-soft-skills" class="flex flex-wrap gap-2 mt-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Suggestions, Recommendations, and Generated Resume Section -->
+            <div id="generation-section" class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8 hidden">
+                <div class="lg:col-span-1">
+                    <div class="bg-white p-6 rounded-2xl shadow-xl border border-gray-200 mb-8">
+                        <h3 class="text-xl font-semibold mb-4 text-gray-700">AI Suggestions & Feedback</h3>
+                        <div id="suggestions-content" class="feedback-list">
+                            <!-- Suggestions will be populated here -->
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-xl border border-gray-200">
+                        <h3 class="text-xl font-semibold mb-4 text-gray-700">AI Recommendations</h3>
+                        <div id="recommendations-content" class="feedback-list">
+                            <!-- Recommendations will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            
+                <div class="lg:col-span-1 bg-white p-6 rounded-2xl shadow-xl border border-gray-200 flex flex-col">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold text-gray-700">AI-Generated Resume</h3>
+                        <button id="copy-resume-btn" class="bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-all duration-200">
+                            Copy Text
+                        </button>
+                    </div>
+                    <textarea id="updated-resume-text" readonly class="w-full p-4 border border-gray-200 rounded-lg bg-gray-50 font-mono text-sm flex-grow"></textarea>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Message Modal -->
+         <div id="message-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center">
+                <p id="modal-message-text" class="text-lg text-gray-700 mb-4"></p>
+                <button onclick="document.getElementById('message-modal').classList.add('hidden')" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition-colors">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const analyzeBtn = document.getElementById('analyze-btn');
+        const resumeTextEl = document.getElementById('resume-text');
+        const jobDescEl = document.getElementById('job-desc');
+        const resultsSection = document.getElementById('results-section');
+        const scoreText = document.getElementById('score-text');
+        const scoreFeedback = document.getElementById('score-feedback');
+        const progressCircle = document.getElementById('progress-circle');
+        const hardSkillsContainer = document.getElementById('hard-skills');
+        const softSkillsContainer = document.getElementById('soft-skills');
+        const missingHardSkillsContainer = document.getElementById('missing-hard-skills');
+        const missingSoftSkillsContainer = document.getElementById('missing-soft-skills');
+        const tabPdf = document.getElementById('tab-pdf');
+        const tabText = document.getElementById('tab-text');
+        const pdfContent = document.getElementById('pdf-content');
+        const textContent = document.getElementById('text-content');
+        const fileInput = document.getElementById('resume-file');
+        const pdfNameEl = document.getElementById('pdf-name');
+        const pdfDropzone = document.getElementById('pdf-dropzone');
+        const dropzonePromptContent = document.getElementById('dropzone-prompt-content');
+        const dropzoneSuccessContent = document.getElementById('dropzone-success-content');
+        const generationSection = document.getElementById('generation-section');
+        const suggestionsContainer = document.getElementById('suggestions-content');
+        const recommendationsContainer = document.getElementById('recommendations-content');
+        const updatedResumeText = document.getElementById('updated-resume-text');
+        const copyResumeBtn = document.getElementById('copy-resume-btn');
+        const experienceCheckEl = document.getElementById('experience-check');
+
+        // --- State Variables ---
+        let resumeContent = '';
+        let currentInputMode = 'pdf';
+        
+        // --- Tabbing Logic ---
+        tabPdf.addEventListener('click', () => { currentInputMode = 'pdf'; tabPdf.classList.add('tab-active'); tabText.classList.remove('tab-active'); pdfContent.classList.remove('hidden'); textContent.classList.add('hidden'); });
+        tabText.addEventListener('click', () => { currentInputMode = 'text'; tabText.classList.add('tab-active'); tabPdf.classList.remove('tab-active'); textContent.classList.remove('hidden'); pdfContent.classList.add('hidden'); });
+
+        // --- File Dropzone & Parsing Logic ---
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => pdfDropzone.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); }, false));
+        ['dragenter', 'dragover'].forEach(eventName => pdfDropzone.addEventListener(eventName, () => pdfDropzone.classList.add('border-blue-500', 'bg-blue-50'), false));
+        ['dragleave', 'drop'].forEach(eventName => pdfDropzone.addEventListener(eventName, () => pdfDropzone.classList.remove('border-blue-500', 'bg-blue-50'), false));
+        pdfDropzone.addEventListener('drop', e => { fileInput.files = e.dataTransfer.files; handleFileChange({ target: fileInput }); });
+        fileInput.addEventListener('change', handleFileChange);
+        
+        async function handleFileChange(event) {
+            const file = event.target.files[0];
+
+            const showPrompt = () => {
+                dropzonePromptContent.classList.remove('hidden');
+                dropzoneSuccessContent.classList.add('hidden');
+            };
+
+            const showSuccess = (fileName) => {
+                dropzonePromptContent.classList.add('hidden');
+                dropzoneSuccessContent.classList.remove('hidden');
+                pdfNameEl.textContent = fileName;
+            };
+
+            if (file && file.type === 'application/pdf') {
+                showSuccess(file.name);
+                try {
+                    resumeContent = await parsePdf(file);
+                } catch (error) {
+                    console.error("PDF Parsing Error:", error);
+                    showMessage("Could not read the PDF file. It might be corrupted or protected.");
+                    resumeContent = '';
+                    showPrompt();
+                    fileInput.value = '';
+                }
+            } else if (file) {
+                showMessage('Please upload a valid PDF file.');
+                showPrompt();
+                fileInput.value = '';
+                resumeContent = '';
+            }
+        }
+        
+        async function parsePdf(file) {
+            const fileReader = new FileReader();
+            return new Promise((resolve, reject) => {
+                fileReader.onload = async function() {
+                    try {
+                        const typedarray = new Uint8Array(this.result);
+                        const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                        let text = '';
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const content = await page.getTextContent();
+                            text += content.items.map(item => item.str).join(' ');
+                        }
+                        resolve(text);
+                    } catch(err) { reject(err); }
+                };
+                fileReader.readAsArrayBuffer(file);
+            });
+        }
+        
+        // --- UI & Utility Functions ---
+        const radius = progressCircle.r.baseVal.value;
+        const circumference = radius * 2 * Math.PI;
+        progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
+        progressCircle.style.strokeDashoffset = circumference;
+
+        function setProgress(percent) {
+            const offset = circumference - (percent / 100) * circumference;
+            progressCircle.style.strokeDashoffset = offset;
+            let currentScore = 0;
+            const interval = setInterval(() => {
+                if (currentScore >= percent) {
+                    scoreText.textContent = `${Math.round(percent)}%`;
+                    clearInterval(interval);
+                } else { 
+                    currentScore++;
+                    scoreText.textContent = `${currentScore}%`; 
+                }
+            }, 15);
+        }
+        
+        function showMessage(message) { 
+            document.getElementById('modal-message-text').textContent = message; 
+            const modal = document.getElementById('message-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        // --- Gemini AI Analysis ---
+        async function analyzeWithGemini(resumeText, jobDescText) {
+            const apiKey = "AIzaSyDWxjdtAxQ0D_3P0v7KHAXeLb80a4U03X8"; // This will be handled by the execution environment
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            const systemPrompt = `You are an expert ATS resume analyzer and career coach. Your task is to analyze a resume against a job description and provide a detailed, structured analysis. The user needs actionable feedback to improve their resume.`;
+
+            const userQuery = `
+                Analyze the following resume and job description. Provide a detailed analysis in a valid JSON format.
+
+                **Resume:**
+                \`\`\`
+                ${resumeText}
+                \`\`\`
+
+                **Job Description:**
+                \`\`\`
+                ${jobDescText}
+                \`\`\`
+            `;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            "matchScore": { "type": "INTEGER", "description": "An overall match score from 0 to 100." },
+                            "experienceAnalysis": { 
+                                "type": "OBJECT",
+                                "description": "Analysis of work experience.",
+                                "properties": {
+                                    "requiredYears": { "type": "INTEGER", "description": "Years of experience required by the job. 0 if not specified." },
+                                    "foundYears": { "type": "INTEGER", "description": "Years of experience found in the resume. 0 if not found." },
+                                    "match": { "type": "BOOLEAN", "description": "True if found years meet or exceed required years." },
+                                    "feedbackText": { "type": "STRING", "description": "A concise feedback string for the UI (e.g., '✅ Match (5 of 3+ years)')."}
+                                }
+                            },
+                            "matchedHardSkills": { "type": "ARRAY", "items": { "type": "STRING" }, "description": "List of hard skills present in both the resume and job description." },
+                            "matchedSoftSkills": { "type": "ARRAY", "items": { "type": "STRING" }, "description": "List of soft skills present in both." },
+                            "missingHardSkills": { "type": "ARRAY", "items": { "type": "STRING" }, "description": "List of hard skills required by the job but missing from the resume." },
+                            "missingSoftSkills": { "type": "ARRAY", "items": { "type": "STRING" }, "description": "List of soft skills required by the job but missing from the resume." },
+                            "suggestions": { "type": "ARRAY", "items": { "type": "STRING" }, "description": "An array of actionable feedback points, starting with experience, then strengths, then opportunities for missing skills." },
+                            "recommendations": { "type": "ARRAY", "items": { "type": "STRING" }, "description": "An array of 2-3 general recommendations to improve the resume's overall quality, such as formatting, using action verbs, and quantifying achievements. This should not include feedback on missing skills." },
+                            "generatedResume": { "type": "STRING", "description": "The full original resume text, professionally rewritten to seamlessly and naturally integrate the missing skills. It should maintain the original's tone and formatting." }
+                        }
+                    }
+                }
+            };
+            
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                console.error("API Error:", response.status, await response.text());
+                throw new Error(`API request failed with status ${response.status}`);
+            }
+            
+            const result = await response.json();
+            const jsonText = result.candidates[0].content.parts[0].text;
+            return JSON.parse(jsonText);
+        }
+
+        // --- Main Analysis Logic ---
+        analyzeBtn.addEventListener('click', async () => {
+            const finalResumeText = (currentInputMode === 'text') ? resumeTextEl.value : resumeContent;
+            const jobDescText = jobDescEl.value;
+
+            if (finalResumeText.trim() === '' || jobDescText.trim() === '') {
+                showMessage('Please provide both your resume and the job description to get an analysis.');
+                return;
+            }
+            analyzeBtn.disabled = true;
+            analyzeBtn.classList.add('is-loading');
+            
+            try {
+                const analysis = await analyzeWithGemini(finalResumeText, jobDescText);
+
+                // --- Populate UI from AI Response ---
+                resultsSection.classList.remove('hidden');
+                setProgress(analysis.matchScore);
+                
+                if (analysis.matchScore >= 80) { scoreFeedback.textContent = "Excellent match! Your resume is highly aligned."; scoreFeedback.className = "text-center mt-4 text-green-600 font-semibold"; } 
+                else if (analysis.matchScore >= 60) { scoreFeedback.textContent = "Good match. A few tweaks will make it even better."; scoreFeedback.className = "text-center mt-4 text-yellow-600 font-semibold"; } 
+                else { scoreFeedback.textContent = "Needs improvement. See suggestions to boost your score."; scoreFeedback.className = "text-center mt-4 text-red-600 font-semibold"; }
+
+                // Experience Check
+                experienceCheckEl.textContent = analysis.experienceAnalysis.feedbackText;
+                experienceCheckEl.className = `text-center mt-2 font-semibold text-lg ${analysis.experienceAnalysis.match ? 'text-green-600' : 'text-red-600'}`;
+
+                // Populate Skills
+                const createKeywordChip = (keyword, type) => { const chip = document.createElement('span'); chip.textContent = keyword; let colors = 'bg-gray-100 text-gray-800'; if (type === 'hard') colors = 'bg-blue-100 text-blue-800'; if (type === 'soft') colors = 'bg-indigo-100 text-indigo-800'; if (type === 'missing') colors = 'bg-red-100 text-red-800'; chip.className = `px-3 py-1 text-sm font-medium rounded-full ${colors}`; return chip; };
+                const populateContainer = (container, keywords, type, emptyMessage) => { container.innerHTML = ''; if (keywords && keywords.length > 0) { keywords.forEach(kw => container.appendChild(createKeywordChip(kw, type))); } else { container.innerHTML = `<p class="text-sm text-gray-500">${emptyMessage}</p>`; } };
+                
+                populateContainer(hardSkillsContainer, analysis.matchedHardSkills, 'hard', 'No matching hard skills found.');
+                populateContainer(softSkillsContainer, analysis.matchedSoftSkills, 'soft', 'No matching soft skills found.');
+                populateContainer(missingHardSkillsContainer, analysis.missingHardSkills, 'missing', 'None! All required hard skills are covered.');
+                populateContainer(missingSoftSkillsContainer, analysis.missingSoftSkills, 'missing', 'None! All required soft skills are covered.');
+
+                // Populate Suggestions, Recommendations, & Generated Resume
+                generateSuggestions(analysis.suggestions);
+                generateRecommendations(analysis.recommendations);
+                updatedResumeText.value = analysis.generatedResume;
+                generationSection.classList.remove('hidden');
+
+                resultsSection.scrollIntoView({ behavior: 'smooth' });
+            } catch (error) { 
+                console.error("Analysis failed:", error); 
+                showMessage("The AI analysis failed. This could be due to a network issue or invalid input. Please check your text and try again."); 
+            } finally { 
+                analyzeBtn.disabled = false; 
+                analyzeBtn.classList.remove('is-loading'); 
+            }
+        });
+
+        function generateSuggestions(suggestions) {
+            if (!suggestions || suggestions.length === 0) {
+                suggestionsContainer.innerHTML = '<ul><li><span class="text-blue-500 mr-3">🎉</span><span><strong>Excellent Alignment:</strong> No immediate changes are suggested.</span></li></ul>';
+                return;
+            }
+            
+            const iconMap = {
+                "high priority": "🚨", "experience gap": "⚠️", "experience match": "✅",
+                "strong point": "✅", "well done": "✅", "opportunity": "💡"
+            };
+            
+            let suggestionsHTML = '<ul>';
+            suggestions.forEach(suggestion => {
+                let icon = '💡';
+                const lowerSuggestion = suggestion.toLowerCase();
+                for (const key in iconMap) {
+                    if (lowerSuggestion.includes(key)) {
+                        icon = iconMap[key];
+                        break;
+                    }
+                }
+                suggestionsHTML += `<li><span class="mr-3">${icon}</span><span>${suggestion}</span></li>`;
+            });
+            suggestionsHTML += '</ul>';
+            suggestionsContainer.innerHTML = suggestionsHTML;
+        }
+
+        function generateRecommendations(recommendations) {
+            if (!recommendations || recommendations.length === 0) {
+                recommendationsContainer.innerHTML = '<p class="text-sm text-gray-500">No specific recommendations were generated. The resume looks solid overall.</p>';
+                return;
+            }
+            
+            let recommendationsHTML = '<ul>';
+            recommendations.forEach(rec => {
+                recommendationsHTML += `<li><span class="text-indigo-500 mr-3">⭐</span><span>${rec}</span></li>`;
+            });
+            recommendationsHTML += '</ul>';
+            recommendationsContainer.innerHTML = recommendationsHTML;
+        }
+
+        copyResumeBtn.addEventListener('click', () => {
+            updatedResumeText.select();
+            document.execCommand('copy');
+            copyResumeBtn.textContent = 'Copied!';
+            setTimeout(() => {
+                copyResumeBtn.textContent = 'Copy Text';
+            }, 2000);
+        });
+
+    </script>
+</body>
+</html>
