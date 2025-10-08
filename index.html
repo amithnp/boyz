@@ -384,7 +384,7 @@
             const jobDescText = jobDescEl.value;
 
             if (finalResumeText.trim() === '' || jobDescText.trim() === '') {
-                showMessage('Mother Fu*ker check properly! Cuz Somethin’s off, and we ain’t playin’ dumb out here.');
+                showMessage('Please re-upload your resume and review the job description to correct errors in your application.');
                 return;
             }
             analyzeBtn.disabled = true;
@@ -429,7 +429,7 @@
 
             } catch (error) { 
                 console.error("Analysis failed:", error); 
-                showMessage("Yo, my bad. The AI is Fucked right now. how about trying after some time!"); 
+                showMessage("The AI is not working right now. Please try again in a few minutes!"); 
             } finally { 
                 analyzeBtn.disabled = false; 
                 analyzeBtn.classList.remove('is-loading'); 
